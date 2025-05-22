@@ -5,7 +5,7 @@ var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
 // あなたのYouTube Data APIキーをここに貼り付けます。
-const API_KEY = 'AIzaSyCsn8iuBszfjyocYFpDPgi-ezZ-BxmqCpE'; // ★★★ここをあなたのAPIキーに貼り付けてください！★★★
+const API_KEY = 'AIzaSyAtASunKOOifOJBvRctJ6o2ILa5D_JgaJw'; // ★★★ここをあなたのAPIキーに貼り付けてください！★★★
 
 // ★★★ここを初期検索キーワードに設定します！★★★
 const INITIAL_SEARCH_QUERY = '国債'; // 初期に検索するキーワードを「国債」に変更しました
