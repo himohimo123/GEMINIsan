@@ -1,7 +1,7 @@
 // YouTube IFrame Player APIを読み込むための準備
 var tag = document.createElement('script');
-// YouTube IFrame Player APIの公式URLをHTTPSに修正！
-tag.src = "https://www.youtube.com/iframe_api"; // ★ここを公式の安定したHTTPS URLに修正しました！★
+// ★★★ここを確実に公式の安定したHTTPS URLに修正しました！★★★
+tag.src = "https://www.youtube.com/iframe_api"; 
 var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
@@ -19,18 +19,17 @@ let playedVideoIds = new Set();
 let likedVideoIds = new Set();  
 let dislikedVideoIds = new Set(); 
 const currentPlayingVideoIdKey = 'currentPlayingVideoId'; 
-let currentSearchQuery = INITIAL_SEARCH_QUERY; // 初期値としてINITIAL_SEARCH_QUERYを設定
+let currentSearchQuery = INITIAL_SEARCH_QUERY; 
 
 // HTML要素への参照を取得
-const videoTitleElement = document.getElementById('videoTitle'); // HTMLに要素がない場合は追加が必要
-const channelTitleElement = document.getElementById('channelTitle'); // HTMLに要素がない場合は追加が必要
+const videoTitleElement = document.getElementById('videoTitle');
+const channelTitleElement = document.getElementById('channelTitle');
 
 function saveUserData() {
     localStorage.setItem('playedVideoIds', JSON.stringify(Array.from(playedVideoIds)));
     localStorage.setItem('likedVideoIds', JSON.stringify(Array.from(likedVideoIds)));
     localStorage.setItem('dislikedVideoIds', JSON.stringify(Array.from(dislikedVideoIds)));
     
-    // playerが準備できているかチェックを追加
     if (player && typeof player.getVideoData === 'function' && player.getVideoData() && player.getVideoData().video_id) {
         const currentVideoId = player.getVideoData().video_id;
         localStorage.setItem(currentPlayingVideoIdKey, currentVideoId);
@@ -62,7 +61,7 @@ function loadUserData() {
 async function fetchVideosFromYouTube(query = '', maxResults = 10) {
     let url;
     if (query) {
-        url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}&order=relevance`; // orderをrelevanceに戻しました
+        url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}&order=relevance`;
     } else {
         url = `https://www.googleapis.com/youtube/v3/videos?key=${API_KEY}&part=snippet,contentDetails&chart=mostPopular&regionCode=JP&maxResults=${maxResults}`;
     }
@@ -80,8 +79,8 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
             id: item.id.videoId || item.id, 
             title: item.snippet.title,
             thumbnail: item.snippet.thumbnails.medium.url, 
-            tags: item.snippet.tags || [], // タグ情報も追加
-            channelTitle: item.snippet.channelTitle // チャンネル名も追加
+            tags: item.snippet.tags || [], 
+            channelTitle: item.snippet.channelTitle 
         })).filter(video =>
             video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id)
         );
@@ -200,8 +199,8 @@ async function playNextVideo() {
 
     if (!nextVideo) {
         console.error("再生可能な動画が見つかりませんでした。");
-        videoTitleElement.textContent = "動画が見つかりませんでした。";
-        channelTitleElement.textContent = "検索キーワードを変更してみてください。";
+        if (videoTitleElement) videoTitleElement.textContent = "動画が見つかりませんでした。";
+        if (channelTitleElement) channelTitleElement.textContent = "検索キーワードを変更してみてください。";
         return; 
     }
 
@@ -211,7 +210,6 @@ async function playNextVideo() {
         saveUserData(); 
         displayCandidateVideos(); 
 
-        // 動画のタイトルとチャンネル名を表示 (要素が存在すれば)
         if (videoTitleElement) videoTitleElement.textContent = nextVideo.title;
         if (channelTitleElement) channelTitleElement.textContent = nextVideo.channelTitle;
 
