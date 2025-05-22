@@ -8,7 +8,7 @@ firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 const API_KEY = 'AIzaSyAtASunKOOifOJBvRctJ6o2ILa5D_JgaJw'; // ★★★ここをあなたのAPIキーに貼り付けてください！★★★
 
 // ★★★ここを初期検索キーワードに設定します！★★★
-const INITIAL_SEARCH_QUERY = '国債'; // 初期に検索するキーワードを「国債」に変更しました
+const INITIAL_SEARCH_QUERY = '旅行'; // 初期に検索するキーワードを「国債」に変更しました
 // ★★★-----------------------------------------------------------★★★
 
 // 動画プールと履歴を管理する変数
