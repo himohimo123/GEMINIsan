@@ -5,7 +5,7 @@ var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
 // あなたのYouTube Data APIキーをここに貼り付けます。
-const API_KEY = 'AIzaSyCsn8iuBszfjyocYFpDPgi-ezZ-BxmqCpE'; // ★ここをあなたのAPIキーに貼り付けてください！
+const API_KEY = 'AIzaSyCsn8iuBszfjyocYFpDPgi-ezZ-BxmqCpE'; // ★★★ここをあなたのAPIキーに貼り付けてください！★★★
 
 // ★★★ここをモハPチャンネルの動画IDとキーワードに設定します！★★★
 const INITIAL_VIDEO_ID = '953Ww9RNY34'; // モハPチャンネルの「日本の30-40年金利過去最高更新」の動画ID
@@ -60,10 +60,10 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
     // 検索クエリがある場合
     if (query) {
         // search APIを使う（キーワード検索）
-        url = `https://www.googleapis.com/youtube/v3/search?key=<span class="math-inline">\{API\_KEY\}&part\=snippet&type\=video&maxResults\=</span>{maxResults}&q=${encodeURIComponent(query)}&order=relevance`;
+        url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}&order=relevance`;
     } else {
         // クエリがない場合は、videos APIの人気動画チャートを使う
-        url = `https://www.googleapis.com/youtube/v3/videos?key=<span class="math-inline">\{API\_KEY\}&part\=snippet,contentDetails&chart\=mostPopular&regionCode\=JP&maxResults\=</span>{maxResults}`;
+        url = `https://www.googleapis.com/youtube/v3/videos?key=${API_KEY}&part=snippet,contentDetails&chart=mostPopular&regionCode=JP&maxResults=${maxResults}`;
     }
 
     try {
@@ -79,7 +79,7 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
             // まだ再生していない、スキップしていない動画、かつ有効なIDを持つ動画だけをフィルタリング
             !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && video.id
         );
-
+        
         // 動画プールに新しい動画を追加
         videoPool = videoPool.concat(newVideos);
         // 重複排除（念のため）
@@ -112,7 +112,7 @@ async function generateSmartSearchQuery() {
     // APIは一度に50件までしかIDを受け付けないため、分割してリクエスト
     for (let i = 0; i < likedVideoIdsArray.length; i += 50) {
         const batchIds = likedVideoIdsArray.slice(i, i + 50);
-        const url = `https://www.googleapis.com/youtube/v3/videos?key=<span class="math-inline">\{API\_KEY\}&part\=snippet&id\=</span>{batchIds.join(',')}`;
+        const url = `https://www.googleapis.com/youtube/v3/videos?key=${API_KEY}&part=snippet&id=${batchIds.join(',')}`;
 
         try {
             const response = await fetch(url);
@@ -215,10 +215,10 @@ function displayCandidateVideos() {
         videoDiv.dataset.videoId = video.id; // クリック時に動画IDがわかるように
 
         videoDiv.innerHTML = `
-            <img src="<span class="math-inline">\{video\.thumbnail\}" alt\="</span>{video.title}">
+            <img src="${video.thumbnail}" alt="${video.title}">
             <div class="video-candidate-title">${video.title}</div>
         `;
-
+        
         // クリックしたらその動画を再生する
         videoDiv.addEventListener('click', () => {
             player.loadVideoById(video.id);
