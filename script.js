@@ -2,8 +2,8 @@
 // このスクリプトはYouTubeの動画プレイヤーをウェブページに埋め込むために必要です。
 var tag = document.createElement('script');
 // YouTube IFrame Player APIの公式URLを修正しました。
-// プロトコル相対URLにすることで、HTTP/HTTPSどちらのページからでも正しく読み込まれます。
-tag.src = "https://www.youtube.com/iframe_api"; 
+// HTTPSを明示的に指定することで、Mixed Contentエラーを確実に回避します。
+tag.src = "https://www.youtube.com/iframe_api"; // ★ここを公式の安定したURLに修正しました！★
 var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
@@ -220,42 +220,40 @@ async function playNextVideo() {
 
     // プールに有効な動画がない場合、または全て再生済み/スキップ済みの場合
     if (!nextVideo) {
-        console.log("動画プールが空です。新しい動画を検索します。");
-        await generateSmartSearchQuery(); // まずスマートな検索クエリを生成
+    console.log("動画プールが空です。新しい動画を検索します。");
+    // まずスマートな検索クエリを生成し、その結果を使って新しい動画をフェッチ
+    await generateSmartSearchQuery(); 
+    const fetchedVideos = await fetchVideosFromYouTube(currentSearchQuery, 20); // 生成されたクエリで20件取得を試みる
 
-        // 新しい動画をフェッチし、その中から有効なものを探す
-        const fetchedVideos = await fetchVideosFromYouTube(currentSearchQuery, 20); // 生成されたクエリで20件取得を試みる
+    // フェッチした動画の中から再生できるものを探す
+    for (const candidate of fetchedVideos) { // fetchedVideosを直接ループ
+        if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
+            nextVideo = candidate; // 有効な動画が見つかったらループを抜ける
+            break;
+        }
+    }
 
-        // フェッチした動画の中から再生できるものを探す
-        while (fetchedVideos.length > 0) {
-            const candidate = fetchedVideos.shift();
+    // それでも動画が見つからない場合は、最終手段として初期検索クエリで再度試す
+    if (!nextVideo) {
+        console.warn("新しい動画をフェッチしましたが、再生可能な動画が見つかりませんでした。再度初期クエリで試します。");
+        await fetchVideosFromYouTube(INITIAL_SEARCH_QUERY, 10); // 初期クエリで10件取得を試みる
+        // 再度プールから取得を試みる
+        while (videoPool.length > 0) {
+            const candidate = videoPool.shift();
             if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
-                nextVideo = candidate; // 有効な動画が見つかったらループを抜ける
+                nextVideo = candidate;
                 break;
             }
         }
+    }
+}
 
-        // それでも動画が見つからない場合は、最終手段として初期検索クエリで再度試す
-        if (!nextVideo) {
-            console.warn("新しい動画をフェッチしましたが、再生可能な動画が見つかりませんでした。再度初期クエリで試します。");
-            await fetchVideosFromYouTube(INITIAL_SEARCH_QUERY, 10); // 初期クエリで10件取得を試みる
-            // 再度プールから取得を試みる
-            while (videoPool.length > 0) {
-                const candidate = videoPool.shift();
-                if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
-                    nextVideo = candidate;
-                    break;
-                }
-            }
-        }
-        
-        // 最終的に再生可能な動画が見つからなかった場合の処理
-        if (!nextVideo) {
-            console.error("再生可能な動画が見つかりませんでした。");
-            videoTitleElement.textContent = "動画が見つかりませんでした。";
-            channelTitleElement.textContent = "検索キーワードを変更してみてください。";
-            return; // これ以上処理を続行しない
-        }
+    // 最終的に再生可能な動画が見つからなかった場合の処理
+    if (!nextVideo) {
+        console.error("再生可能な動画が見つかりませんでした。");
+        videoTitleElement.textContent = "動画が見つかりませんでした。";
+        channelTitleElement.textContent = "検索キーワードを変更してみてください。";
+        return; // これ以上処理を続行しない
     }
 
     // YouTubeプレイヤーが準備できていて、次の動画が有効な場合のみ再生処理を行う
