@@ -5,7 +5,12 @@ var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
 // あなたのYouTube Data APIキーをここに貼り付けます。
-const API_KEY = 'AIzaSyCsn8iuBszfjyocYFpDPgi-ezZ-BxmqCpE';
+const API_KEY = 'AIzaSyCsn8iuBszfjyocYFpDPgi-ezZ-BxmqCpE'; // ★ここをあなたのAPIキーに貼り付けてください！
+
+// ★★★ここをモハPチャンネルの動画IDとキーワードに設定します！★★★
+const INITIAL_VIDEO_ID = '953Ww9RNY34'; // モハPチャンネルの「日本の30-40年金利過去最高更新」の動画ID
+const INITIAL_SEARCH_QUERY = 'モハPチャンネル 経済'; // 初期に検索するキーワード
+// ★★★-----------------------------------------------------------★★★
 
 // 動画プールと履歴を管理する変数
 let videoPool = []; // 次に再生する動画の候補をためておく場所
@@ -13,7 +18,7 @@ let playedVideoIds = new Set(); // すでに再生した動画のIDを記憶し�
 let likedVideoIds = new Set();  // 「いいね」した動画のIDを記憶しておく場所
 let dislikedVideoIds = new Set(); // 「スキップ」した動画のIDを記憶しておく場所
 const currentPlayingVideoIdKey = 'currentPlayingVideoId'; // 現在再生中の動画IDを保存するためのキー
-let currentSearchQuery = ''; // 現在の検索クエリを保存
+let currentSearchQuery = INITIAL_SEARCH_QUERY; // 現在の検索クエリを初期設定
 
 // ブラウザにデータを保存・読み込みする関数
 function saveUserData() {
@@ -51,16 +56,15 @@ function loadUserData() {
 
 // --- YouTube Data APIを使って動画を検索する関数 ---
 async function fetchVideosFromYouTube(query = '', maxResults = 10) {
-    let url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}`;
-
-    // 初期ロード時やプールが少ない場合は、人気動画も混ぜる
-    if (!query && videoPool.length < 5) {
-        url = `https://www.googleapis.com/youtube/v3/videos?key=${API_KEY}&part=snippet,contentDetails&chart=mostPopular&regionCode=JP&maxResults=${maxResults}`;
-    } else if (query) {
-         // 検索クエリがある場合、人気順にソート（関連性ではなく）
-        url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}&order=viewCount`;
+    let url;
+    // 検索クエリがある場合
+    if (query) {
+        // search APIを使う（キーワード検索）
+        url = `https://www.googleapis.com/youtube/v3/search?key=<span class="math-inline">\{API\_KEY\}&part\=snippet&type\=video&maxResults\=</span>{maxResults}&q=${encodeURIComponent(query)}&order=relevance`;
+    } else {
+        // クエリがない場合は、videos APIの人気動画チャートを使う
+        url = `https://www.googleapis.com/youtube/v3/videos?key=<span class="math-inline">\{API\_KEY\}&part\=snippet,contentDetails&chart\=mostPopular&regionCode\=JP&maxResults\=</span>{maxResults}`;
     }
-
 
     try {
         const response = await fetch(url); // YouTube APIにリクエストを送る
@@ -69,12 +73,13 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
         const newVideos = data.items.map(item => ({
             id: item.id.videoId || item.id, // search.listとvideos.listでIDの場所が違うため
             title: item.snippet.title,
-            thumbnail: item.snippet.thumbnails.medium.url // ミディアムサイズのサムネイル
+            thumbnail: item.snippet.thumbnails.medium.url, // ミディアムサイズのサムネイル
+            tags: item.snippet.tags || [] // 新しくタグ情報を追加！
         })).filter(video =>
-            // まだ再生していない、スキップしていない動画だけをフィルタリング
+            // まだ再生していない、スキップしていない動画、かつ有効なIDを持つ動画だけをフィルタリング
             !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && video.id
         );
-        
+
         // 動画プールに新しい動画を追加
         videoPool = videoPool.concat(newVideos);
         // 重複排除（念のため）
@@ -82,21 +87,73 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
         videoPool = Array.from(uniqueVideoIds).map(id => videoPool.find(v => v.id === id));
 
         console.log("動画を検索し、プールに追加しました。現在のプールサイズ:", videoPool.length);
-        displayCandidateVideos(); // 候補動画を表示する（後で作成）
+        displayCandidateVideos(); // 候補動画を表示する
 
     } catch (error) {
         console.error("YouTube APIでの動画検索中にエラーが発生しました:", error);
+        // APIキーのエラーなど、致命的なエラーの場合はユーザーに通知する
+        alert('動画の読み込み中にエラーが発生しました。APIキーを確認してください。');
+    }
+}
+
+// --- いいねした動画のタグから関連キーワードを生成する関数 ---
+async function generateSmartSearchQuery() {
+    if (likedVideoIds.size === 0) {
+        // いいねした動画がない場合は、初期の検索クエリを使用
+        currentSearchQuery = INITIAL_SEARCH_QUERY;
+        return;
+    }
+
+    let allTags = [];
+    // いいねした動画のIDをすべて取得
+    const likedVideoIdsArray = Array.from(likedVideoIds);
+
+    // YouTube Data APIのvideos.listを使って、いいねした動画のタグを取得
+    // APIは一度に50件までしかIDを受け付けないため、分割してリクエスト
+    for (let i = 0; i < likedVideoIdsArray.length; i += 50) {
+        const batchIds = likedVideoIdsArray.slice(i, i + 50);
+        const url = `https://www.googleapis.com/youtube/v3/videos?key=<span class="math-inline">\{API\_KEY\}&part\=snippet&id\=</span>{batchIds.join(',')}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            data.items.forEach(item => {
+                if (item.snippet && item.snippet.tags) {
+                    allTags = allTags.concat(item.snippet.tags);
+                }
+            });
+        } catch (error) {
+            console.error("いいねした動画のタグ取得中にエラーが発生しました:", error);
+        }
+    }
+
+    // 最も頻繁に出てくるタグをいくつか選ぶ（例: 上位3つ）
+    const tagCounts = {};
+    allTags.forEach(tag => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+    });
+
+    const sortedTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+    const topTags = sortedTags.slice(0, 3); // 上位3つのタグを選ぶ
+
+    if (topTags.length > 0) {
+        // 選ばれたタグをスペースでつなげて新しい検索クエリにする
+        currentSearchQuery = topTags.join(' ');
+        console.log("いいねした動画から生成された検索クエリ:", currentSearchQuery);
+    } else {
+        // タグが見つからない場合は、初期の検索クエリに戻す
+        currentSearchQuery = INITIAL_SEARCH_QUERY;
     }
 }
 
 // --- 次の動画を選んで再生する関数 ---
-function playNextVideo() {
+async function playNextVideo() { // asyncを追加
     let nextVideo = null;
 
     // まずプールから未再生の動画を探す
     while (videoPool.length > 0) {
         const candidate = videoPool.shift(); // プールから最初の動画を取り出す
-        if (!playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
+        if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
             nextVideo = candidate;
             break;
         }
@@ -105,15 +162,14 @@ function playNextVideo() {
     // プールに動画がない、または全て再生済み/スキップ済みの場合
     if (!nextVideo) {
         console.log("動画プールが空です。新しい動画を検索します。");
-        // ここでAPIを叩いて新しい動画を探す
-        // 今回はまだキーワードが複雑ではないので空のクエリで人気動画や一般的な動画を取得
-        fetchVideosFromYouTube(currentSearchQuery, 20); // 20件取得を試みる
-        // すぐに再生できる動画がない場合があるので、一旦初期動画に戻すか、ユーザーに待機を促す
-        // 今回は新しい動画がフェッチされるまで少し待つ前提
+        await generateSmartSearchQuery(); // まずスマートな検索クエリを生成
+        await fetchVideosFromYouTube(currentSearchQuery, 20); // そのクエリで20件取得を試みる
+
+        // 新しくフェッチで追加された動画から選ぶ
         if (videoPool.length === 0) { // まだプールが空なら初期動画を再生
-            nextVideo = { id: 'dQw4w9WgXcQ', title: 'Default Video', thumbnail: '' };
-        } else { // フェッチで追加された動画から選ぶ
-            nextVideo = videoPool.shift();
+            nextVideo = { id: INITIAL_VIDEO_ID, title: 'Default Video', thumbnail: '' };
+        } else {
+            nextVideo = videoPool.shift(); 
         }
     }
 
@@ -125,8 +181,8 @@ function playNextVideo() {
     } else {
         console.error("次の動画が見つからないか、プレイヤーが準備できていません。", nextVideo);
         // エラー時もとりあえずデフォルト動画に戻す
-        player.loadVideoById('dQw4w9WgXcQ');
-        playedVideoIds.add('dQw4w9WgXcQ');
+        player.loadVideoById(INITIAL_VIDEO_ID);
+        playedVideoIds.add(INITIAL_VIDEO_ID);
         saveUserData();
     }
 }
@@ -134,14 +190,18 @@ function playNextVideo() {
 
 // --- 候補動画をHTMLに表示する関数 ---
 function displayCandidateVideos() {
-    const candidateContainer = document.getElementById('候補動画を表示する場所');
+    const candidateContainer = document.getElementById('候補動画を表示する場所'); // HTMLのidと合わせる
+    if (!candidateContainer) {
+        console.warn("ID '候補動画を表示する場所' を持つ要素が見つかりませんでした。");
+        return;
+    }
     candidateContainer.innerHTML = ''; // 一度表示をクリア
 
     // プールから、まだ表示されていない、再生済み/スキップ済みでない動画を最大6件表示
     const uniqueCandidates = [];
     const displayedIds = new Set();
     for (const video of videoPool) {
-        if (!playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !displayedIds.has(video.id) && video.id) {
+        if (video && video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !displayedIds.has(video.id)) {
             uniqueCandidates.push(video);
             displayedIds.add(video.id);
         }
@@ -155,10 +215,10 @@ function displayCandidateVideos() {
         videoDiv.dataset.videoId = video.id; // クリック時に動画IDがわかるように
 
         videoDiv.innerHTML = `
-            <img src="${video.thumbnail}" alt="${video.title}">
+            <img src="<span class="math-inline">\{video\.thumbnail\}" alt\="</span>{video.title}">
             <div class="video-candidate-title">${video.title}</div>
         `;
-        
+
         // クリックしたらその動画を再生する
         videoDiv.addEventListener('click', () => {
             player.loadVideoById(video.id);
@@ -181,7 +241,7 @@ function onYouTubeIframeAPIReady() {
     player = new YT.Player('player', {
         height: '390',
         width: '640',
-        videoId: lastPlayedVideoId || 'dQw4w9WgXcQ', // 前回再生中の動画がなければ初期動画
+        videoId: lastPlayedVideoId || INITIAL_VIDEO_ID, // 前回再生中の動画がなければ初期動画
         playerVars: {
             'autoplay': 1,
             'mute': 1,
@@ -197,7 +257,7 @@ function onYouTubeIframeAPIReady() {
 }
 
 // プレイヤーの準備が完了した時に呼ばれる関数
-function onPlayerReady(event) {
+async function onPlayerReady(event) { // asyncを追加
     event.target.playVideo();
     console.log("YouTubeプレイヤーの準備ができました！");
     const currentVideoId = player.getVideoData().video_id;
@@ -205,10 +265,11 @@ function onPlayerReady(event) {
         playedVideoIds.add(currentVideoId); // 初回再生の動画も履歴に追加
         saveUserData();
     }
+    // まず好みに合わせた検索クエリを生成
+    await generateSmartSearchQuery(); // ここで生成を待つ
     // 初期ロード時と、動画プールが空の場合に動画を検索
-    if (videoPool.length < 5) {
-        fetchVideosFromYouTube('音楽', 20); // 最初に20件の音楽動画を取得
-        currentSearchQuery = '音楽'; // 初期検索クエリを設定
+    if (videoPool.length < 5) { // プールが少ない場合に新しい動画を検索
+        fetchVideosFromYouTube(currentSearchQuery, 20); // 生成されたクエリで20件取得
     }
 }
 
