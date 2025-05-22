@@ -5,7 +5,7 @@ var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
 // あなたのYouTube Data APIキーをここに貼り付けます。
-const API_KEY = 'AIzaSyCsn8iuBszfjyocYFpDPgi-ezZ-BxmqCpE';
+const API_KEY = 'YOUR_API_KEY_HERE';
 
 // 動画プールと履歴を管理する変数
 let videoPool = []; // 次に再生する動画の候補をためておく場所
@@ -13,6 +13,7 @@ let playedVideoIds = new Set(); // すでに再生した動画のIDを記憶し�
 let likedVideoIds = new Set();  // 「いいね」した動画のIDを記憶しておく場所
 let dislikedVideoIds = new Set(); // 「スキップ」した動画のIDを記憶しておく場所
 const currentPlayingVideoIdKey = 'currentPlayingVideoId'; // 現在再生中の動画IDを保存するためのキー
+let currentSearchQuery = ''; // 現在の検索クエリを保存
 
 // ブラウザにデータを保存・読み込みする関数
 function saveUserData() {
@@ -50,14 +51,14 @@ function loadUserData() {
 
 // --- YouTube Data APIを使って動画を検索する関数 ---
 async function fetchVideosFromYouTube(query = '', maxResults = 10) {
-    let url = `https://www.googleapis.com/youtube/v3/search?key=<span class="math-inline">\{API\_KEY\}&part\=snippet&type\=video&maxResults\=</span>{maxResults}&q=${encodeURIComponent(query)}`;
+    let url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}`;
 
     // 初期ロード時やプールが少ない場合は、人気動画も混ぜる
     if (!query && videoPool.length < 5) {
-        url = `https://www.googleapis.com/youtube/v3/videos?key=<span class="math-inline">\{API\_KEY\}&part\=snippet,contentDetails&chart\=mostPopular&regionCode\=JP&maxResults\=</span>{maxResults}`;
+        url = `https://www.googleapis.com/youtube/v3/videos?key=${API_KEY}&part=snippet,contentDetails&chart=mostPopular&regionCode=JP&maxResults=${maxResults}`;
     } else if (query) {
          // 検索クエリがある場合、人気順にソート（関連性ではなく）
-        url = `https://www.googleapis.com/youtube/v3/search?key=<span class="math-inline">\{API\_KEY\}&part\=snippet&type\=video&maxResults\=</span>{maxResults}&q=${encodeURIComponent(query)}&order=viewCount`;
+        url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}&order=viewCount`;
     }
 
 
@@ -73,7 +74,7 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
             // まだ再生していない、スキップしていない動画だけをフィルタリング
             !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && video.id
         );
-
+        
         // 動画プールに新しい動画を追加
         videoPool = videoPool.concat(newVideos);
         // 重複排除（念のため）
@@ -106,7 +107,7 @@ function playNextVideo() {
         console.log("動画プールが空です。新しい動画を検索します。");
         // ここでAPIを叩いて新しい動画を探す
         // 今回はまだキーワードが複雑ではないので空のクエリで人気動画や一般的な動画を取得
-        fetchVideosFromYouTube('', 20); // 20件取得を試みる
+        fetchVideosFromYouTube(currentSearchQuery, 20); // 20件取得を試みる
         // すぐに再生できる動画がない場合があるので、一旦初期動画に戻すか、ユーザーに待機を促す
         // 今回は新しい動画がフェッチされるまで少し待つ前提
         if (videoPool.length === 0) { // まだプールが空なら初期動画を再生
@@ -154,10 +155,10 @@ function displayCandidateVideos() {
         videoDiv.dataset.videoId = video.id; // クリック時に動画IDがわかるように
 
         videoDiv.innerHTML = `
-            <img src="<span class="math-inline">\{video\.thumbnail\}" alt\="</span>{video.title}">
+            <img src="${video.thumbnail}" alt="${video.title}">
             <div class="video-candidate-title">${video.title}</div>
         `;
-
+        
         // クリックしたらその動画を再生する
         videoDiv.addEventListener('click', () => {
             player.loadVideoById(video.id);
@@ -206,7 +207,8 @@ function onPlayerReady(event) {
     }
     // 初期ロード時と、動画プールが空の場合に動画を検索
     if (videoPool.length < 5) {
-        fetchVideosFromYouTube('', 20); // 最初に20件の人気動画を取得してみる
+        fetchVideosFromYouTube('音楽', 20); // 最初に20件の音楽動画を取得
+        currentSearchQuery = '音楽'; // 初期検索クエリを設定
     }
 }
 
