@@ -1,0 +1,97 @@
+body {
+    font-family: Arial, sans-serif; /* 文字の種類を読みやすくします */
+    display: flex; /* 要素を横並びに配置しやすくします */
+    justify-content: center; /* 中央に寄せます */
+    align-items: flex-start; /* 上端に揃えます */
+    min-height: 100vh; /* 画面の高さいっぱいに広げます */
+    margin: 0; /* 余白をなくします */
+    background-color: #f0f0f0; /* 背景色を少し灰色にします */
+    color: #333; /* 文字色を濃い灰色にします */
+    padding: 20px; /* 全体に少し余白を入れます */
+    box-sizing: border-box; /* 余白を含めてサイズ計算するようにします */
+}
+
+.container {
+    background-color: #fff; /* コンテンツの背景を白にします */
+    padding: 30px; /* 内側に余白を入れます */
+    border-radius: 8px; /* 角を丸くします */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* 影をつけて立体的に見せます */
+    width: 100%; /* 幅をいっぱいに広げます */
+    max-width: 800px; /* 最大幅を設定して見やすくします */
+    text-align: center; /* 文字を中央揃えにします */
+}
+
+h1 {
+    color: #e62117; /* YouTubeっぽい赤色に設定します */
+    margin-bottom: 30px; /* 下に余白を入れます */
+}
+
+#player {
+    width: 100%; /* 幅をいっぱいに広げます */
+    max-width: 720px; /* 最大幅を設定します */
+    aspect-ratio: 16 / 9; /* 動画の縦横比を16:9に固定します */
+    background-color: #000; /* 動画が読み込まれるまで黒い背景にします */
+    margin: 0 auto 30px auto; /* 中央に配置し、下に余白を入れます */
+}
+
+.controls button {
+    background-color: #007bff; /* ボタンの背景色を青色にします */
+    color: white; /* ボタンの文字色を白にします */
+    padding: 10px 20px; /* ボタンの内側に余白を入れます */
+    border: none; /* ボタンの枠線をなくします */
+    border-radius: 5px; /* ボタンの角を丸くします */
+    cursor: pointer; /* マウスを乗せたときに指の形にします */
+    font-size: 16px; /* ボタンの文字サイズを設定します */
+    margin: 5px; /* ボタン同士の間に余白を入れます */
+    transition: background-color 0.3s ease; /* 色が変わる時にアニメーションをつけます */
+}
+
+.controls button:hover {
+    background-color: #0056b3; /* マウスを乗せた時の色を少し濃くします */
+}
+
+h2 {
+    margin-top: 40px; /* 上に余白を入れます */
+    color: #555; /* 少し薄い文字色にします */
+}
+
+#候補動画を表示する場所 {
+    display: flex; /* 候補動画を横並びに配置します */
+    flex-wrap: wrap; /* 画面の幅を超えたら次の行に折り返します */
+    justify-content: center; /* 中央に寄せます */
+    gap: 15px; /* 動画候補の間に隙間を作ります */
+    margin-top: 20px; /* 上に余白を入れます */
+}
+
+/* 以下は動画候補（サムネイルなど）のスタイルです。
+   JavaScriptで動画候補が追加されたときに適用されます。*/
+.video-candidate {
+    width: 220px; /* 候補動画の幅を設定します */
+    background-color: #f9f9f9; /* 候補動画の背景色を少し白っぽくします */
+    border-radius: 8px; /* 角を丸くします */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); /* 影をつけます */
+    overflow: hidden; /* はみ出した部分を隠します */
+    cursor: pointer; /* マウスを乗せたときに指の形にします */
+    transition: transform 0.2s ease; /* マウスを乗せた時に少しアニメーションします */
+    text-align: left; /* 文字を左揃えにします */
+}
+
+.video-candidate:hover {
+    transform: translateY(-5px); /* マウスを乗せた時に少し上に移動させます */
+}
+
+.video-candidate img {
+    width: 100%; /* 画像の幅をいっぱいに広げます */
+    height: auto; /* 高さは自動調整します */
+    display: block; /* 余計な隙間をなくします */
+}
+
+.video-candidate-title {
+    padding: 10px; /* タイトル内側に余白を入れます */
+    font-size: 14px; /* タイトルの文字サイズを設定します */
+    color: #333; /* タイトルの文字色を設定します */
+    line-height: 1.4; /* 行の高さを設定します */
+    max-height: 4em; /* 4行までに制限します */
+    overflow: hidden; /* はみ出した文字を隠します */
+    text-overflow: ellipsis; /* はみ出した文字を「...」で表示します */
+}
