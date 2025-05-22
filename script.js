@@ -1,7 +1,9 @@
 // YouTube IFrame Player APIを読み込むための準備
 // このスクリプトはYouTubeの動画プレイヤーをウェブページに埋め込むために必要です。
 var tag = document.createElement('script');
-tag.src = "http://www.youtube.com/iframe_api"; // YouTube IFrame Player APIの公式URL
+// YouTube IFrame Player APIの公式URLを修正しました。
+// プロトコル相対URLにすることで、HTTP/HTTPSどちらのページからでも正しく読み込まれます。
+tag.src = "https://www.youtube.com/iframe_api"; 
 var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
@@ -18,7 +20,6 @@ let videoPool = []; // 次に再生する動画の候補を一時的に保存す
 let playedVideoIds = new Set(); // これまでに再生した動画のIDを記録するSet（重複なし）
 let likedVideoIds = new Set();  // 「いいね」した動画のIDを記録するSet
 let dislikedVideoIds = new Set(); // 「スキップ」した動画のIDを記録するSet
-// let neverShowVideoIds = new Set(); // 「二度と表示しない」機能は削除されました
 const currentPlayingVideoIdKey = 'currentPlayingVideoId'; // 現在再生中の動画IDをlocalStorageに保存するためのキー
 let currentSearchQuery = INITIAL_SEARCH_QUERY; // 現在の検索に使用するクエリ（初期値はINITIAL_SEARCH_QUERY）
 
@@ -29,14 +30,12 @@ const channelTitleElement = document.getElementById('channelTitle');
 /**
  * ユーザーデータをブラウザのlocalStorageに保存する関数。
  * 再生履歴、いいね、スキップ、現在再生中の動画IDを保存します。
- * 「二度と表示しない」機能は削除されたため、関連するデータは保存されません。
  */
 function saveUserData() {
     // Setオブジェクトは直接JSONに変換できないため、Arrayに変換してから保存
     localStorage.setItem('playedVideoIds', JSON.stringify(Array.from(playedVideoIds)));
     localStorage.setItem('likedVideoIds', JSON.stringify(Array.from(likedVideoIds)));
     localStorage.setItem('dislikedVideoIds', JSON.stringify(Array.from(dislikedVideoIds)));
-    // localStorage.setItem('neverShowVideoIds', JSON.stringify(Array.from(neverShowVideoIds))); // 削除
 
     // 現在再生中の動画IDを保存（プレイヤーが準備できていて、動画がロードされている場合のみ）
     if (player && typeof player.getVideoData === 'function' && player.getVideoData() && player.getVideoData().video_id) {
@@ -52,14 +51,12 @@ function saveUserData() {
 /**
  * ブラウザのlocalStorageからユーザーデータを読み込む関数。
  * 保存されたIDリストをSetオブジェクトとして復元します。
- * 「二度と表示しない」機能は削除されたため、関連するデータは読み込まれません。
  * @returns {string|null} 前回再生中だった動画のID、またはnull
  */
 function loadUserData() {
     const storedPlayed = localStorage.getItem('playedVideoIds');
     const storedLiked = localStorage.getItem('likedVideoIds');
     const storedDisliked = localStorage.getItem('dislikedVideoIds');
-    // const storedNeverShow = localStorage.getItem('neverShowVideoIds'); // 削除
     const storedCurrentVideoId = localStorage.getItem(currentPlayingVideoIdKey);
 
     if (storedPlayed) {
@@ -71,9 +68,6 @@ function loadUserData() {
     if (storedDisliked) {
         dislikedVideoIds = new Set(JSON.parse(storedDisliked));
     }
-    // if (storedNeverShow) { // 削除
-    //     neverShowVideoIds = new Set(JSON.parse(storedNeverShow)); // 削除
-    // }
     console.log("ユーザーデータを読み込みました！");
     return storedCurrentVideoId; // 前回再生中だった動画IDを返して、アプリ起動時に再開できるようにする
 }
@@ -101,8 +95,6 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
         // APIからのレスポンスに問題がないかチェック
         if (!data.items || !Array.isArray(data.items)) {
             console.warn("YouTube APIからのレスポンスに問題があります。itemsがありません。", data);
-            // APIキーのエラーなど、致命的なエラーの場合はユーザーに通知する
-            // alert('動画の読み込み中にエラーが発生しました。APIキーまたはネットワーク設定を確認してください。');
             return []; // 空の配列を返す
         }
 
@@ -115,7 +107,7 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
             channelTitle: item.snippet.channelTitle // チャンネル名
         })).filter(video =>
             // 有効なIDを持ち、かつまだ再生していない、スキップしていない動画のみを対象とする
-            video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) // && !neverShowVideoIds.has(video.id) // 削除
+            video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id)
         );
         
         videoPool = videoPool.concat(newVideos); // 新しい動画をプールに追加
@@ -129,8 +121,6 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
 
     } catch (error) {
         console.error("YouTube APIでの動画検索中にエラーが発生しました:", error);
-        // APIキーのエラーなど、致命的なエラーの場合はユーザーに通知する
-        // alert('動画の読み込み中にエラーが発生しました。APIキーまたはネットワーク設定を確認してください。');
         return []; // エラー時は空の配列を返す
     }
 }
@@ -222,7 +212,7 @@ async function playNextVideo() {
     // プールが空になるまで、または有効な動画が見つかるまでループ
     while (videoPool.length > 0) {
         const candidate = videoPool.shift(); // プールから最初の動画を取り出す
-        if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) { // && !neverShowVideoIds.has(candidate.id) // 削除
+        if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
             nextVideo = candidate; // 有効な動画が見つかったらループを抜ける
             break;
         }
@@ -239,7 +229,7 @@ async function playNextVideo() {
         // フェッチした動画の中から再生できるものを探す
         while (fetchedVideos.length > 0) {
             const candidate = fetchedVideos.shift();
-            if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) { // && !neverShowVideoIds.has(candidate.id) // 削除
+            if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
                 nextVideo = candidate; // 有効な動画が見つかったらループを抜ける
                 break;
             }
@@ -252,7 +242,7 @@ async function playNextVideo() {
             // 再度プールから取得を試みる
             while (videoPool.length > 0) {
                 const candidate = videoPool.shift();
-                if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) { // && !neverShowVideoIds.has(candidate.id) // 削除
+                if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
                     nextVideo = candidate;
                     break;
                 }
@@ -304,7 +294,7 @@ function displayCandidateVideos() {
     // videoPoolはshiftで要素が減っていくため、ここではコピーしてループ処理を行う
     const currentPool = Array.from(videoPool); 
     for (const video of currentPool) {
-        if (video && video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !displayedIds.has(video.id)) { // && !neverShowVideoIds.has(video.id) // 削除
+        if (video && video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !displayedIds.has(video.id)) {
             uniqueCandidates.push(video);
             displayedIds.add(video.id);
         }
@@ -381,7 +371,7 @@ async function onPlayerReady(event) {
     const lastPlayedVideoId = localStorage.getItem(currentPlayingVideoIdKey);
 
     // 前回再生していた動画があり、それがまだ再生済み/スキップ済みリストになければ再生を試みる
-    if (lastPlayedVideoId && !playedVideoIds.has(lastPlayedVideoId) && !dislikedVideoIds.has(lastPlayedVideoId)) { // && !neverShowVideoIds.has(lastPlayedVideoId) // 削除
+    if (lastPlayedVideoId && !playedVideoIds.has(lastPlayedVideoId) && !dislikedVideoIds.has(lastPlayedVideoId)) {
         player.loadVideoById(lastPlayedVideoId); // 前回再生していた動画をロード
         playedVideoIds.add(lastPlayedVideoId); // 再生した動画として記録
         // 動画データがロードされるまで少し待ってからタイトルなどを表示
@@ -460,15 +450,6 @@ function onPlayerError(event) {
     videoTitleElement.textContent = errorMessage;
     channelTitleElement.textContent = "次の動画を自動で探します...";
     
-    // エラーが発生した動画は「二度と表示しない」リストに追加し、次回以降表示しないようにする
-    // if (player && typeof player.getVideoData === 'function' && player.getVideoData() && player.getVideoData().video_id) { // 削除
-    //     const currentVideoId = player.getVideoData().video_id; // 削除
-    //     if (currentVideoId && !neverShowVideoIds.has(currentVideoId)) { // 削除
-    //         neverShowVideoIds.add(currentVideoId); // 削除
-    //         playedVideoIds.add(currentVideoId); // 念のため再生済みにも追加してプールから除外されやすくする // 削除
-    //         saveUserData(); // ユーザーデータを保存 // 削除
-    //     } // 削除
-    // } // 削除
     playNextVideo(); // 次の動画の再生を試みる
 }
 
@@ -501,23 +482,5 @@ document.getElementById('likeButton').addEventListener('click', function() {
     }
 });
 
-// 「この動画を二度と表示しない」ボタンが押された時の処理
-// document.getElementById('neverShowButton').addEventListener('click', function() { // 削除
-//     if (player && typeof player.getVideoData === 'function') { // 削除
-//         const currentVideoId = player.getVideoData().video_id; // 削除
-//         if (currentVideoId && !neverShowVideoIds.has(currentVideoId)) { // 削除
-//             neverShowVideoIds.add(currentVideoId); // 二度と表示しないリストに追加 // 削除
-//             playedVideoIds.add(currentVideoId); // 再生済みにも追加し、プールからも除外されやすくする // 削除
-//             console.log("「この動画を二度と表示しない」ボタンが押されました！動画ID:", currentVideoId); // 削除
-//             // alert('この動画は今後表示されなくなります。'); // ユーザーに通知 // 削除
-//             // alert()は使えないので、代わりにメッセージボックスやモーダルUIを使うべきですが、今回はコンソールログのみ // 削除
-//             saveUserData(); // ユーザーデータを保存 // 削除
-//             displayCandidateVideos(); // 候補動画の表示を更新 // 削除
-//         } // 削除
-//     } // 削除
-//     playNextVideo(); // 次の動画を再生 // 削除
-// }); // 削除
-
 // ページを閉じる前にデータを保存する（ブラウザタブを閉じる、F5以外でページ遷移など）
 window.addEventListener('beforeunload', saveUserData);
-
