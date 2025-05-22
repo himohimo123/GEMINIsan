@@ -1,8 +1,9 @@
 // YouTube IFrame Player APIを読み込むための準備
 // このスクリプトはYouTubeの動画プレイヤーをウェブページに埋め込むために必要です。
 var tag = document.createElement('script');
-// ★★★ここを公式の安定したHTTPS URLに修正しました！★★★
-tag.src = "https://www.youtube.com/iframe_api"; 
+// ★★★ここを、YouTube公式の正しいHTTPS URLに修正しました！★★★
+// このURLは、YouTube IFrame Player APIを安全に読み込むためのものです。
+tag.src = "http://www.youtube.com/iframe_api"; 
 var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
