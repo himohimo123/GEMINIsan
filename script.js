@@ -9,7 +9,7 @@ const API_KEY = 'AIzaSyCsn8iuBszfjyocYFpDPgi-ezZ-BxmqCpE'; // ★★★ここを
 
 // ★★★ここをモハPチャンネルの初期検索キーワードに設定します！★★★
 // INITIAL_VIDEO_IDは直接指定せず、検索で取得するように変更しました。
-const INITIAL_SEARCH_QUERY = 'モハPチャンネル 経済'; // 初期に検索するキーワード
+const INITIAL_SEARCH_QUERY = '国債'; // 初期に検索するキーワード
 // ★★★-----------------------------------------------------------★★★
 
 // 動画プールと履歴を管理する変数
