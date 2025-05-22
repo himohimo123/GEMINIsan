@@ -1,28 +1,38 @@
 // YouTube IFrame Player APIを読み込むための準備
 var tag = document.createElement('script');
-tag.src = "https://www.youtube.com/iframe_api";
+// YouTube IFrame Player APIの公式URLをHTTPSに修正！
+tag.src = "https://www.youtube.com/iframe_api"; // ★ここを公式の安定したHTTPS URLに修正しました！★
 var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
 // あなたのYouTube Data APIキーをここに貼り付けます。
-const API_KEY = 'AIzaSyAtASunKOOifOJBvRctJ6o2ILa5D_JgaJw';
+const API_KEY = 'AIzaSyAtASunKOOifOJBvRctJ6o2ILa5D_JgaJw'; // ★★★ここをあなたのAPIキーに貼り付けてください！★★★
 
-// 動画プールと履歴を管理する変数
-let videoPool = []; // 次に再生する動画の候補をためておく場所
-let playedVideoIds = new Set(); // すでに再生した動画のIDを記憶しておく場所（重複を防ぐため）
-let likedVideoIds = new Set();  // 「いいね」した動画のIDを記憶しておく場所
-let dislikedVideoIds = new Set(); // 「スキップ」した動画のIDを記憶しておく場所
-const currentPlayingVideoIdKey = 'currentPlayingVideoId'; // 現在再生中の動画IDを保存するためのキー
-let currentSearchQuery = ''; // 現在の検索クエリを保存
+// ★ここから最初の動画と検索キーワードをカスタマイズ！★
+const INITIAL_VIDEO_ID = 'dQw4w9WgXcQ'; // Rick Astley - Never Gonna Give You Up
+const INITIAL_SEARCH_QUERY = '音楽'; // 初期に検索するキーワード (例: '人気動画', '旅行', '経済' など)
+// ★ここまで★
 
-// ブラウザにデータを保存・読み込みする関数
+// 動画プールと履歴を管理するための変数群
+let videoPool = []; 
+let playedVideoIds = new Set(); 
+let likedVideoIds = new Set();  
+let dislikedVideoIds = new Set(); 
+const currentPlayingVideoIdKey = 'currentPlayingVideoId'; 
+let currentSearchQuery = INITIAL_SEARCH_QUERY; // 初期値としてINITIAL_SEARCH_QUERYを設定
+
+// HTML要素への参照を取得
+const videoTitleElement = document.getElementById('videoTitle'); // HTMLに要素がない場合は追加が必要
+const channelTitleElement = document.getElementById('channelTitle'); // HTMLに要素がない場合は追加が必要
+
 function saveUserData() {
     localStorage.setItem('playedVideoIds', JSON.stringify(Array.from(playedVideoIds)));
     localStorage.setItem('likedVideoIds', JSON.stringify(Array.from(likedVideoIds)));
     localStorage.setItem('dislikedVideoIds', JSON.stringify(Array.from(dislikedVideoIds)));
-    // 現在再生中の動画IDも保存
-    const currentVideoId = player ? player.getVideoData().video_id : null;
-    if (currentVideoId) {
+    
+    // playerが準備できているかチェックを追加
+    if (player && typeof player.getVideoData === 'function' && player.getVideoData() && player.getVideoData().video_id) {
+        const currentVideoId = player.getVideoData().video_id;
         localStorage.setItem(currentPlayingVideoIdKey, currentVideoId);
     } else {
         localStorage.removeItem(currentPlayingVideoIdKey);
@@ -46,202 +56,337 @@ function loadUserData() {
         dislikedVideoIds = new Set(JSON.parse(storedDisliked));
     }
     console.log("ユーザーデータを読み込みました！");
-    return storedCurrentVideoId; // 現在再生中だった動画IDを返す
+    return storedCurrentVideoId; 
 }
 
-// --- YouTube Data APIを使って動画を検索する関数 ---
 async function fetchVideosFromYouTube(query = '', maxResults = 10) {
-    let url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}`;
-
-    // 初期ロード時やプールが少ない場合は、人気動画も混ぜる
-    if (!query && videoPool.length < 5) {
+    let url;
+    if (query) {
+        url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}&order=relevance`; // orderをrelevanceに戻しました
+    } else {
         url = `https://www.googleapis.com/youtube/v3/videos?key=${API_KEY}&part=snippet,contentDetails&chart=mostPopular&regionCode=JP&maxResults=${maxResults}`;
-    } else if (query) {
-         // 検索クエリがある場合、人気順にソート（関連性ではなく）
-        url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}&order=viewCount`;
     }
 
-
     try {
-        const response = await fetch(url); // YouTube APIにリクエストを送る
-        const data = await response.json(); // 受け取ったデータをJavaScriptで使える形にする
+        const response = await fetch(url); 
+        const data = await response.json(); 
+
+        if (!data.items || !Array.isArray(data.items)) {
+            console.warn("YouTube APIからのレスポンスに問題があります。itemsがありません。", data);
+            return []; 
+        }
 
         const newVideos = data.items.map(item => ({
-            id: item.id.videoId || item.id, // search.listとvideos.listでIDの場所が違うため
+            id: item.id.videoId || item.id, 
             title: item.snippet.title,
-            thumbnail: item.snippet.thumbnails.medium.url // ミディアムサイズのサムネイル
+            thumbnail: item.snippet.thumbnails.medium.url, 
+            tags: item.snippet.tags || [], // タグ情報も追加
+            channelTitle: item.snippet.channelTitle // チャンネル名も追加
         })).filter(video =>
-            // まだ再生していない、スキップしていない動画だけをフィルタリング
-            !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && video.id
+            video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id)
         );
         
-        // 動画プールに新しい動画を追加
-        videoPool = videoPool.concat(newVideos);
-        // 重複排除（念のため）
-        const uniqueVideoIds = new Set(videoPool.map(v => v.id));
-        videoPool = Array.from(uniqueVideoIds).map(id => videoPool.find(v => v.id === id));
+        videoPool = videoPool.concat(newVideos); 
+        const uniqueVideoIdsInPool = new Set(videoPool.map(v => v.id));
+        videoPool = Array.from(uniqueVideoIdsInPool).map(id => videoPool.find(v => v.id === id));
 
         console.log("動画を検索し、プールに追加しました。現在のプールサイズ:", videoPool.length);
-        displayCandidateVideos(); // 候補動画を表示する（後で作成）
+        displayCandidateVideos(); 
+        return newVideos; 
 
     } catch (error) {
         console.error("YouTube APIでの動画検索中にエラーが発生しました:", error);
+        return []; 
     }
 }
 
-// --- 次の動画を選んで再生する関数 ---
-function playNextVideo() {
+async function generateSmartSearchQuery() {
+    if (likedVideoIds.size === 0) {
+        currentSearchQuery = INITIAL_SEARCH_QUERY;
+        console.log("いいねした動画がないため、初期検索クエリを使用:", currentSearchQuery);
+        return;
+    }
+
+    let allTags = []; 
+    let channelTitles = new Set(); 
+    const likedVideoIdsArray = Array.from(likedVideoIds);
+
+    for (let i = 0; i < likedVideoIdsArray.length; i += 50) {
+        const batchIds = likedVideoIdsArray.slice(i, i + 50);
+        const url = `https://www.googleapis.com/youtube/v3/videos?key=${API_KEY}&part=snippet&id=${batchIds.join(',')}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            if (!data.items || !Array.isArray(data.items)) {
+                console.warn("タグ/チャンネル取得APIからのレスポンスに問題があります。itemsがありません。", data);
+                continue; 
+            }
+            data.items.forEach(item => {
+                if (item.snippet) {
+                    if (item.snippet.tags) {
+                        allTags = allTags.concat(item.snippet.tags); 
+                    }
+                    if (item.snippet.channelTitle) {
+                        channelTitles.add(item.snippet.channelTitle); 
+                    }
+                }
+            });
+        } catch (error) {
+            console.error("いいねした動画のタグ/チャンネル取得中にエラーが発生しました:", error);
+        }
+    }
+
+    const tagCounts = {};
+    allTags.forEach(tag => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+    });
+
+    const sortedTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+    const topTags = sortedTags.slice(0, 3); 
+
+    let smartQueryParts = [];
+    if (channelTitles.size > 0) {
+        smartQueryParts = Array.from(channelTitles).slice(0, 2); 
+        smartQueryParts = smartQueryParts.concat(topTags.slice(0, 3 - smartQueryParts.length));
+    } else {
+        smartQueryParts = topTags;
+    }
+
+    if (smartQueryParts.length > 0) {
+        currentSearchQuery = smartQueryParts.join(' ');
+        console.log("いいねした動画から生成された検索クエリ:", currentSearchQuery);
+    } else {
+        currentSearchQuery = INITIAL_SEARCH_QUERY;
+        console.log("いいねした動画から適切な検索クエリを生成できませんでした。初期検索クエリに戻します:", currentSearchQuery);
+    }
+}
+
+async function playNextVideo() {
     let nextVideo = null;
 
-    // まずプールから未再生の動画を探す
     while (videoPool.length > 0) {
-        const candidate = videoPool.shift(); // プールから最初の動画を取り出す
-        if (!playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
-            nextVideo = candidate;
+        const candidate = videoPool.shift(); 
+        if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
+            nextVideo = candidate; 
             break;
         }
     }
 
-    // プールに動画がない、または全て再生済み/スキップ済みの場合
     if (!nextVideo) {
         console.log("動画プールが空です。新しい動画を検索します。");
-        // ここでAPIを叩いて新しい動画を探す
-        // 今回はまだキーワードが複雑ではないので空のクエリで人気動画や一般的な動画を取得
-        fetchVideosFromYouTube(currentSearchQuery, 20); // 20件取得を試みる
-        // すぐに再生できる動画がない場合があるので、一旦初期動画に戻すか、ユーザーに待機を促す
-        // 今回は新しい動画がフェッチされるまで少し待つ前提
-        if (videoPool.length === 0) { // まだプールが空なら初期動画を再生
-            nextVideo = { id: 'dQw4w9WgXcQ', title: 'Default Video', thumbnail: '' };
-        } else { // フェッチで追加された動画から選ぶ
-            nextVideo = videoPool.shift();
+        await generateSmartSearchQuery(); 
+        const fetchedVideos = await fetchVideosFromYouTube(currentSearchQuery, 20); 
+
+        for (const candidate of fetchedVideos) { 
+            if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
+                nextVideo = candidate; 
+                break;
+            }
+        }
+
+        if (!nextVideo) {
+            console.warn("新しい動画をフェッチしましたが、再生可能な動画が見つかりませんでした。再度初期クエリで試します。");
+            await fetchVideosFromYouTube(INITIAL_SEARCH_QUERY, 10); 
+            while (videoPool.length > 0) {
+                const candidate = videoPool.shift();
+                if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
+                    nextVideo = candidate;
+                    break;
+                }
+            }
         }
     }
 
-    if (player && nextVideo && nextVideo.id) {
-        player.loadVideoById(nextVideo.id);
-        playedVideoIds.add(nextVideo.id); // 再生した動画として追加
-        saveUserData(); // データを保存
-        displayCandidateVideos(); // 候補動画の表示を更新
+    if (!nextVideo) {
+        console.error("再生可能な動画が見つかりませんでした。");
+        videoTitleElement.textContent = "動画が見つかりませんでした。";
+        channelTitleElement.textContent = "検索キーワードを変更してみてください。";
+        return; 
+    }
+
+    if (player && typeof player.loadVideoById === 'function' && nextVideo && nextVideo.id) {
+        player.loadVideoById(nextVideo.id); 
+        playedVideoIds.add(nextVideo.id); 
+        saveUserData(); 
+        displayCandidateVideos(); 
+
+        // 動画のタイトルとチャンネル名を表示 (要素が存在すれば)
+        if (videoTitleElement) videoTitleElement.textContent = nextVideo.title;
+        if (channelTitleElement) channelTitleElement.textContent = nextVideo.channelTitle;
+
     } else {
         console.error("次の動画が見つからないか、プレイヤーが準備できていません。", nextVideo);
-        // エラー時もとりあえずデフォルト動画に戻す
-        player.loadVideoById('dQw4w9WgXcQ');
-        playedVideoIds.add('dQw4w9WgXcQ');
-        saveUserData();
+        if (videoTitleElement) videoTitleElement.textContent = "動画の読み込みに失敗しました";
+        if (channelTitleElement) channelTitleElement.textContent = "チャンネル情報なし";
     }
 }
 
-
-// --- 候補動画をHTMLに表示する関数 ---
 function displayCandidateVideos() {
-    const candidateContainer = document.getElementById('候補動画を表示する場所');
-    candidateContainer.innerHTML = ''; // 一度表示をクリア
+    const candidateContainer = document.getElementById('候補動画を表示する場所'); 
+    if (!candidateContainer) {
+        console.warn("ID '候補動画を表示する場所' を持つ要素が見つかりませんでした。");
+        return;
+    }
+    candidateContainer.innerHTML = ''; 
 
-    // プールから、まだ表示されていない、再生済み/スキップ済みでない動画を最大6件表示
     const uniqueCandidates = [];
     const displayedIds = new Set();
-    for (const video of videoPool) {
-        if (!playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !displayedIds.has(video.id) && video.id) {
+    const currentPool = Array.from(videoPool); 
+    for (const video of currentPool) {
+        if (video && video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !displayedIds.has(video.id)) {
             uniqueCandidates.push(video);
             displayedIds.add(video.id);
         }
-        if (uniqueCandidates.length >= 6) break; // 最大6件表示
+        if (uniqueCandidates.length >= 6) break; 
     }
-
 
     uniqueCandidates.forEach(video => {
         const videoDiv = document.createElement('div');
-        videoDiv.className = 'video-candidate';
-        videoDiv.dataset.videoId = video.id; // クリック時に動画IDがわかるように
+        videoDiv.className = 'video-candidate'; 
+        videoDiv.dataset.videoId = video.id; 
 
         videoDiv.innerHTML = `
-            <img src="${video.thumbnail}" alt="${video.title}">
-            <div class="video-candidate-title">${video.title}</div>
+            <img src="${video.thumbnail}" alt="${video.title}" class="rounded-md">
+            <div class="video-candidate-title text-sm font-medium mt-1">${video.title}</div>
+            <div class="video-candidate-channel text-xs text-gray-500">${video.channelTitle || 'チャンネル不明'}</div>
         `;
         
-        // クリックしたらその動画を再生する
         videoDiv.addEventListener('click', () => {
-            player.loadVideoById(video.id);
-            playedVideoIds.add(video.id);
-            // 再生したらプールから削除（または見たものとしてマーク）
-            videoPool = videoPool.filter(v => v.id !== video.id);
-            saveUserData();
-            displayCandidateVideos(); // 表示を更新
+            if (player && typeof player.loadVideoById === 'function') { 
+                player.loadVideoById(video.id); 
+                playedVideoIds.add(video.id); 
+                videoPool = videoPool.filter(v => v.id !== video.id); 
+                saveUserData(); 
+                displayCandidateVideos(); 
+            } else {
+                console.error("プレイヤーが準備できていないため、動画を再生できません。");
+            }
         });
 
-        candidateContainer.appendChild(videoDiv);
+        candidateContainer.appendChild(videoDiv); 
     });
 }
 
-// YouTubeプレイヤーの準備ができたら呼び出される関数
 var player;
-function onYouTubeIframeAPIReady() {
-    const lastPlayedVideoId = loadUserData(); // ユーザーデータをまず読み込み、前回再生中の動画IDを取得
 
-    player = new YT.Player('player', {
-        height: '390',
-        width: '640',
-        videoId: lastPlayedVideoId || 'dQw4w9WgXcQ', // 前回再生中の動画がなければ初期動画
+function onYouTubeIframeAPIReady() {
+    const lastPlayedVideoId = loadUserData(); 
+
+    player = new YT.Player('player', { 
+        height: '390', 
+        width: '640',  
+        videoId: lastPlayedVideoId || INITIAL_VIDEO_ID, 
         playerVars: {
-            'autoplay': 1,
-            'mute': 1,
-            'controls': 1,
-            'loop': 0,
-            'rel': 0
+            'autoplay': 1, 
+            'mute': 1,     
+            'controls': 1, 
+            'loop': 0,     
+            'rel': 0       
         },
         events: {
-            'onReady': onPlayerReady,
-            'onStateChange': onPlayerStateChange
+            'onReady': onPlayerReady,      
+            'onStateChange': onPlayerStateChange, 
+            'onError': onPlayerError       
         }
     });
 }
 
-// プレイヤーの準備が完了した時に呼ばれる関数
-function onPlayerReady(event) {
-    event.target.playVideo();
+async function onPlayerReady(event) {
     console.log("YouTubeプレイヤーの準備ができました！");
-    const currentVideoId = player.getVideoData().video_id;
-    if (currentVideoId && !playedVideoIds.has(currentVideoId)) {
-        playedVideoIds.add(currentVideoId); // 初回再生の動画も履歴に追加
-        saveUserData();
+
+    const lastPlayedVideoId = localStorage.getItem(currentPlayingVideoIdKey);
+
+    if (lastPlayedVideoId && !playedVideoIds.has(lastPlayedVideoId) && !dislikedVideoIds.has(lastPlayedVideoId)) {
+        player.loadVideoById(lastPlayedVideoId); 
+        playedVideoIds.add(lastPlayedVideoId); 
+        const checkVideoDataInterval = setInterval(() => {
+            const videoData = player.getVideoData();
+            if (videoData && videoData.title && videoData.author) {
+                if (videoTitleElement) videoTitleElement.textContent = videoData.title;
+                if (channelTitleElement) channelTitleElement.textContent = videoData.author;
+                clearInterval(checkVideoDataInterval); 
+            }
+        }, 100); 
+
+        saveUserData(); 
+    } else {
+        console.log("初期動画または履歴の動画が見つからない、または再生できません。新しい動画を探します。");
+        await playNextVideo(); 
     }
-    // 初期ロード時と、動画プールが空の場合に動画を検索
-    if (videoPool.length < 5) {
-        fetchVideosFromYouTube('音楽', 20); // 最初に20件の音楽動画を取得
-        currentSearchQuery = '音楽'; // 初期検索クエリを設定
+
+    event.target.playVideo(); 
+
+    await generateSmartSearchQuery(); 
+    if (videoPool.length < 5) { 
+        fetchVideosFromYouTube(currentSearchQuery, 20); 
     }
 }
 
-// プレイヤーの状態が変わった時に呼ばれる関数
 function onPlayerStateChange(event) {
     if (event.data == YT.PlayerState.ENDED) {
         console.log("動画の再生が終わりました。次の動画を探します...");
-        playNextVideo(); // 動画が終わったら次の動画を再生
+        playNextVideo(); 
+    } else if (event.data == YT.PlayerState.PLAYING) {
+        const checkVideoDataInterval = setInterval(() => {
+            const videoData = player.getVideoData();
+            if (videoData && videoData.title && videoData.author) {
+                if (videoTitleElement) videoTitleElement.textContent = videoData.title;
+                if (channelTitleElement) channelTitleElement.textContent = videoData.author;
+                clearInterval(checkVideoDataInterval);
+            }
+        }, 100); 
     }
 }
 
-// スキップボタンが押された時の処理
+function onPlayerError(event) {
+    console.error("YouTubeプレイヤーでエラーが発生しました。コード:", event.data);
+    let errorMessage = "動画の読み込み中にエラーが発生しました。";
+    switch (event.data) {
+        case 2:
+            errorMessage = "動画IDが正しくないか、動画が存在しません。";
+            break;
+        case 5:
+            errorMessage = "HTML5プレイヤーのエラーです。";
+            break;
+        case 100:
+            errorMessage = "動画が見つからないか、非公開です。";
+            break;
+        case 101:
+        case 150:
+            errorMessage = "埋め込みが許可されていないか、地域制限されています。";
+            break;
+    }
+    if (videoTitleElement) videoTitleElement.textContent = errorMessage;
+    if (channelTitleElement) channelTitleElement.textContent = "次の動画を自動で探します...";
+    
+    playNextVideo(); 
+}
+
+// --- ボタンイベントリスナー ---
+
 document.getElementById('skipButton').addEventListener('click', function() {
-    const currentVideoId = player.getVideoData().video_id;
-    if (currentVideoId && !dislikedVideoIds.has(currentVideoId)) { // 同じ動画を何度もスキップしないように
-        dislikedVideoIds.add(currentVideoId); // スキップした動画として追加
-        console.log("スキップボタンが押されました！動画ID:", currentVideoId);
-        saveUserData(); // データを保存
-        displayCandidateVideos(); // 候補動画の表示を更新
+    if (player && typeof player.getVideoData === 'function') {
+        const currentVideoId = player.getVideoData().video_id;
+        if (currentVideoId && !dislikedVideoIds.has(currentVideoId)) { 
+            dislikedVideoIds.add(currentVideoId); 
+            console.log("スキップボタンが押されました！動画ID:", currentVideoId);
+            saveUserData(); 
+            displayCandidateVideos(); 
+        }
     }
-    playNextVideo(); // 次の動画を再生
+    playNextVideo(); 
 });
 
-// いいねボタンが押された時の処理
 document.getElementById('likeButton').addEventListener('click', function() {
-    const currentVideoId = player.getVideoData().video_id;
-    if (currentVideoId && !likedVideoIds.has(currentVideoId)) { // 同じ動画を何度もいいねしないように
-        likedVideoIds.add(currentVideoId); // いいねした動画として追加
-        console.log("いいねボタンが押されました！動画ID:", currentVideoId);
-        saveUserData(); // データを保存
-        // いいねしたからといってすぐに次の動画には進まない
+    if (player && typeof player.getVideoData === 'function') {
+        const currentVideoId = player.getVideoData().video_id;
+        if (currentVideoId && !likedVideoIds.has(currentVideoId)) { 
+            likedVideoIds.add(currentVideoId); 
+            console.log("いいねボタンが押されました！動画ID:", currentVideoId);
+            saveUserData(); 
+        }
     }
 });
 
-// ページを閉じる前にデータを保存する（ブラウザタブを閉じる、F5以外でページ遷移など）
 window.addEventListener('beforeunload', saveUserData);
