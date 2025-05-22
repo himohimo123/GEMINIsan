@@ -17,14 +17,21 @@ let videoPool = []; // 次に再生する動画の候補をためておく場所
 let playedVideoIds = new Set(); // すでに再生した動画のIDを記憶しておく場所（重複を防ぐため）
 let likedVideoIds = new Set();  // 「いいね」した動画のIDを記憶しておく場所
 let dislikedVideoIds = new Set(); // 「スキップ」した動画のIDを記憶しておく場所
+let neverShowVideoIds = new Set(); // ★新機能★ 「二度と表示しない」動画のIDを記憶しておく場所
 const currentPlayingVideoIdKey = 'currentPlayingVideoId'; // 現在再生中の動画IDを保存するためのキー
 let currentSearchQuery = INITIAL_SEARCH_QUERY; // 現在の検索クエリを初期設定
+
+// HTML要素への参照を保存
+const videoTitleElement = document.getElementById('videoTitle');
+const channelTitleElement = document.getElementById('channelTitle');
+
 
 // ブラウザにデータを保存・読み込みする関数
 function saveUserData() {
     localStorage.setItem('playedVideoIds', JSON.stringify(Array.from(playedVideoIds)));
     localStorage.setItem('likedVideoIds', JSON.stringify(Array.from(likedVideoIds)));
     localStorage.setItem('dislikedVideoIds', JSON.stringify(Array.from(dislikedVideoIds)));
+    localStorage.setItem('neverShowVideoIds', JSON.stringify(Array.from(neverShowVideoIds))); // ★新機能★
     // 現在再生中の動画IDも保存
     const currentVideoId = player ? player.getVideoData().video_id : null;
     if (currentVideoId) {
@@ -39,6 +46,7 @@ function loadUserData() {
     const storedPlayed = localStorage.getItem('playedVideoIds');
     const storedLiked = localStorage.getItem('likedVideoIds');
     const storedDisliked = localStorage.getItem('dislikedVideoIds');
+    const storedNeverShow = localStorage.getItem('neverShowVideoIds'); // ★新機能★
     const storedCurrentVideoId = localStorage.getItem(currentPlayingVideoIdKey);
 
     if (storedPlayed) {
@@ -49,6 +57,9 @@ function loadUserData() {
     }
     if (storedDisliked) {
         dislikedVideoIds = new Set(JSON.parse(storedDisliked));
+    }
+    if (storedNeverShow) { // ★新機能★
+        neverShowVideoIds = new Set(JSON.parse(storedNeverShow));
     }
     console.log("ユーザーデータを読み込みました！");
     return storedCurrentVideoId; // 現在再生中だった動画IDを返す
@@ -74,10 +85,11 @@ async function fetchVideosFromYouTube(query = '', maxResults = 10) {
             id: item.id.videoId || item.id, // search.listとvideos.listでIDの場所が違うため
             title: item.snippet.title,
             thumbnail: item.snippet.thumbnails.medium.url, // ミディアムサイズのサムネイル
-            tags: item.snippet.tags || [] // 新しくタグ情報を追加！
+            tags: item.snippet.tags || [], // タグ情報
+            channelTitle: item.snippet.channelTitle // ★新機能★ チャンネル名も取得
         })).filter(video =>
-            // まだ再生していない、スキップしていない動画、かつ有効なIDを持つ動画だけをフィルタリング
-            !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && video.id
+            // まだ再生していない、スキップしていない、二度と表示しない動画、かつ有効なIDを持つ動画だけをフィルタリング
+            !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !neverShowVideoIds.has(video.id) && video.id // ★新機能★
         );
         
         // 動画プールに新しい動画を追加
@@ -105,10 +117,11 @@ async function generateSmartSearchQuery() {
     }
 
     let allTags = [];
+    let channelTitles = new Set(); // ★新機能★ チャンネル名も収集
     // いいねした動画のIDをすべて取得
     const likedVideoIdsArray = Array.from(likedVideoIds);
 
-    // YouTube Data APIのvideos.listを使って、いいねした動画のタグを取得
+    // YouTube Data APIのvideos.listを使って、いいねした動画のタグとチャンネル名を取得
     // APIは一度に50件までしかIDを受け付けないため、分割してリクエスト
     for (let i = 0; i < likedVideoIdsArray.length; i += 50) {
         const batchIds = likedVideoIdsArray.slice(i, i + 50);
@@ -118,12 +131,17 @@ async function generateSmartSearchQuery() {
             const response = await fetch(url);
             const data = await response.json();
             data.items.forEach(item => {
-                if (item.snippet && item.snippet.tags) {
-                    allTags = allTags.concat(item.snippet.tags);
+                if (item.snippet) {
+                    if (item.snippet.tags) {
+                        allTags = allTags.concat(item.snippet.tags);
+                    }
+                    if (item.snippet.channelTitle) { // ★新機能★
+                        channelTitles.add(item.snippet.channelTitle);
+                    }
                 }
             });
         } catch (error) {
-            console.error("いいねした動画のタグ取得中にエラーが発生しました:", error);
+            console.error("いいねした動画のタグ/チャンネル取得中にエラーが発生しました:", error);
         }
     }
 
@@ -136,30 +154,43 @@ async function generateSmartSearchQuery() {
     const sortedTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
     const topTags = sortedTags.slice(0, 3); // 上位3つのタグを選ぶ
 
-    if (topTags.length > 0) {
-        // 選ばれたタグをスペースでつなげて新しい検索クエリにする
-        currentSearchQuery = topTags.join(' ');
+    // チャンネル名とタグを組み合わせる（例: チャンネル名2つとタグ1つ、またはタグ3つ）
+    let smartQueryParts = [];
+    if (channelTitles.size > 0) {
+        // チャンネル名がある場合は、まずチャンネル名を優先
+        smartQueryParts = Array.from(channelTitles).slice(0, 2); // 上位2つのチャンネル名
+        // 残りの枠にタグを追加
+        smartQueryParts = smartQueryParts.concat(topTags.slice(0, 3 - smartQueryParts.length));
+    } else {
+        // チャンネル名がない場合は、タグのみ
+        smartQueryParts = topTags;
+    }
+
+
+    if (smartQueryParts.length > 0) {
+        // 選ばれたキーワードをスペースでつなげて新しい検索クエリにする
+        currentSearchQuery = smartQueryParts.join(' ');
         console.log("いいねした動画から生成された検索クエリ:", currentSearchQuery);
     } else {
-        // タグが見つからない場合は、初期の検索クエリに戻す
+        // タグもチャンネル名も見つからない場合は、初期の検索クエリに戻す
         currentSearchQuery = INITIAL_SEARCH_QUERY;
     }
 }
 
 // --- 次の動画を選んで再生する関数 ---
-async function playNextVideo() { // asyncを追加
+async function playNextVideo() {
     let nextVideo = null;
 
-    // まずプールから未再生の動画を探す
+    // まずプールから未再生、未スキップ、二度と表示しない動画を探す
     while (videoPool.length > 0) {
         const candidate = videoPool.shift(); // プールから最初の動画を取り出す
-        if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id)) {
+        if (candidate && candidate.id && !playedVideoIds.has(candidate.id) && !dislikedVideoIds.has(candidate.id) && !neverShowVideoIds.has(candidate.id)) { // ★新機能★
             nextVideo = candidate;
             break;
         }
     }
 
-    // プールに動画がない、または全て再生済み/スキップ済みの場合
+    // プールに動画がない、または全て再生済み/スキップ済み/二度と表示しない場合
     if (!nextVideo) {
         console.log("動画プールが空です。新しい動画を検索します。");
         await generateSmartSearchQuery(); // まずスマートな検索クエリを生成
@@ -167,7 +198,7 @@ async function playNextVideo() { // asyncを追加
 
         // 新しくフェッチで追加された動画から選ぶ
         if (videoPool.length === 0) { // まだプールが空なら初期動画を再生
-            nextVideo = { id: INITIAL_VIDEO_ID, title: 'Default Video', thumbnail: '' };
+            nextVideo = { id: INITIAL_VIDEO_ID, title: 'Default Video', thumbnail: '', channelTitle: 'Default Channel' }; // ★新機能★
         } else {
             nextVideo = videoPool.shift(); 
         }
@@ -178,12 +209,19 @@ async function playNextVideo() { // asyncを追加
         playedVideoIds.add(nextVideo.id); // 再生した動画として追加
         saveUserData(); // データを保存
         displayCandidateVideos(); // 候補動画の表示を更新
+
+        // ★新機能★ 動画のタイトルとチャンネル名を表示
+        videoTitleElement.textContent = nextVideo.title;
+        channelTitleElement.textContent = nextVideo.channelTitle;
+
     } else {
         console.error("次の動画が見つからないか、プレイヤーが準備できていません。", nextVideo);
         // エラー時もとりあえずデフォルト動画に戻す
         player.loadVideoById(INITIAL_VIDEO_ID);
         playedVideoIds.add(INITIAL_VIDEO_ID);
         saveUserData();
+        videoTitleElement.textContent = "動画の読み込みに失敗しました"; // ★新機能★
+        channelTitleElement.textContent = "チャンネル情報なし"; // ★新機能★
     }
 }
 
@@ -197,11 +235,11 @@ function displayCandidateVideos() {
     }
     candidateContainer.innerHTML = ''; // 一度表示をクリア
 
-    // プールから、まだ表示されていない、再生済み/スキップ済みでない動画を最大6件表示
+    // プールから、まだ表示されていない、再生済み/スキップ済み/二度と表示しない動画を最大6件表示
     const uniqueCandidates = [];
     const displayedIds = new Set();
     for (const video of videoPool) {
-        if (video && video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !displayedIds.has(video.id)) {
+        if (video && video.id && !playedVideoIds.has(video.id) && !dislikedVideoIds.has(video.id) && !neverShowVideoIds.has(video.id) && !displayedIds.has(video.id)) { // ★新機能★
             uniqueCandidates.push(video);
             displayedIds.add(video.id);
         }
@@ -257,10 +295,16 @@ function onYouTubeIframeAPIReady() {
 }
 
 // プレイヤーの準備が完了した時に呼ばれる関数
-async function onPlayerReady(event) { // asyncを追加
+async function onPlayerReady(event) {
     event.target.playVideo();
     console.log("YouTubeプレイヤーの準備ができました！");
     const currentVideoId = player.getVideoData().video_id;
+    // ★新機能★ 最初の動画のタイトルとチャンネル名を表示
+    const videoData = player.getVideoData();
+    videoTitleElement.textContent = videoData.title || 'タイトルなし';
+    channelTitleElement.textContent = videoData.author || 'チャンネル名なし';
+
+
     if (currentVideoId && !playedVideoIds.has(currentVideoId)) {
         playedVideoIds.add(currentVideoId); // 初回再生の動画も履歴に追加
         saveUserData();
@@ -278,6 +322,10 @@ function onPlayerStateChange(event) {
     if (event.data == YT.PlayerState.ENDED) {
         console.log("動画の再生が終わりました。次の動画を探します...");
         playNextVideo(); // 動画が終わったら次の動画を再生
+    } else if (event.data == YT.PlayerState.PLAYING) { // 再生中にタイトルとチャンネル名を更新
+        const videoData = player.getVideoData();
+        videoTitleElement.textContent = videoData.title || 'タイトルなし';
+        channelTitleElement.textContent = videoData.author || 'チャンネル名なし';
     }
 }
 
@@ -302,6 +350,20 @@ document.getElementById('likeButton').addEventListener('click', function() {
         saveUserData(); // データを保存
         // いいねしたからといってすぐに次の動画には進まない
     }
+});
+
+// ★新機能★ 「この動画を二度と表示しない」ボタンが押された時の処理
+document.getElementById('neverShowButton').addEventListener('click', function() {
+    const currentVideoId = player.getVideoData().video_id;
+    if (currentVideoId && !neverShowVideoIds.has(currentVideoId)) {
+        neverShowVideoIds.add(currentVideoId); // 二度と表示しないリストに追加
+        playedVideoIds.add(currentVideoId); // 再生済みにも追加し、プールからも除外されやすくする
+        console.log("「この動画を二度と表示しない」ボタンが押されました！動画ID:", currentVideoId);
+        alert('この動画は今後表示されなくなります。'); // ユーザーに通知
+        saveUserData(); // データを保存
+        displayCandidateVideos(); // 候補動画の表示を更新
+    }
+    playNextVideo(); // 次の動画を再生
 });
 
 // ページを閉じる前にデータを保存する（ブラウザタブを閉じる、F5以外でページ遷移など）

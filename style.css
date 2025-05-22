@@ -1,97 +1,195 @@
 body {
-    font-family: Arial, sans-serif; /* 文字の種類を読みやすくします */
-    display: flex; /* 要素を横並びに配置しやすくします */
-    justify-content: center; /* 中央に寄せます */
-    align-items: flex-start; /* 上端に揃えます */
-    min-height: 100vh; /* 画面の高さいっぱいに広げます */
-    margin: 0; /* 余白をなくします */
-    background-color: #f0f0f0; /* 背景色を少し灰色にします */
-    color: #333; /* 文字色を濃い灰色にします */
-    padding: 20px; /* 全体に少し余白を入れます */
-    box-sizing: border-box; /* 余白を含めてサイズ計算するようにします */
+    font-family: 'Arial', sans-serif;
+    background-color: #f0f2f5;
+    color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* 上部に寄せる */
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
 .container {
-    background-color: #fff; /* コンテンツの背景を白にします */
-    padding: 30px; /* 内側に余白を入れます */
-    border-radius: 8px; /* 角を丸くします */
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* 影をつけて立体的に見せます */
-    width: 100%; /* 幅をいっぱいに広げます */
-    max-width: 800px; /* 最大幅を設定して見やすくします */
-    text-align: center; /* 文字を中央揃えにします */
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    width: 100%;
+    max-width: 800px;
 }
 
 h1 {
-    color: #e62117; /* YouTubeっぽい赤色に設定します */
-    margin-bottom: 30px; /* 下に余白を入れます */
+    color: #e03a2e; /* YouTubeっぽい赤 */
+    margin-bottom: 25px;
+    font-size: 2.5em;
+    font-weight: bold;
 }
 
 #player {
-    width: 100%; /* 幅をいっぱいに広げます */
-    max-width: 720px; /* 最大幅を設定します */
-    aspect-ratio: 16 / 9; /* 動画の縦横比を16:9に固定します */
-    background-color: #000; /* 動画が読み込まれるまで黒い背景にします */
-    margin: 0 auto 30px auto; /* 中央に配置し、下に余白を入れます */
+    width: 100%;
+    /* 16:9のアスペクト比を維持するためのハック */
+    position: relative;
+    padding-bottom: 56.25%; /* 9 / 16 = 0.5625 */
+    height: 0;
+    overflow: hidden;
+    background-color: #000;
+    border-radius: 8px;
 }
 
-.controls button {
-    background-color: #007bff; /* ボタンの背景色を青色にします */
-    color: white; /* ボタンの文字色を白にします */
-    padding: 10px 20px; /* ボタンの内側に余白を入れます */
-    border: none; /* ボタンの枠線をなくします */
-    border-radius: 5px; /* ボタンの角を丸くします */
-    cursor: pointer; /* マウスを乗せたときに指の形にします */
-    font-size: 16px; /* ボタンの文字サイズを設定します */
-    margin: 5px; /* ボタン同士の間に余白を入れます */
-    transition: background-color 0.3s ease; /* 色が変わる時にアニメーションをつけます */
+#player iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 8px;
 }
 
-.controls button:hover {
-    background-color: #0056b3; /* マウスを乗せた時の色を少し濃くします */
+.video-info {
+    margin-top: 20px;
+    margin-bottom: 25px;
+    text-align: left;
 }
 
-h2 {
-    margin-top: 40px; /* 上に余白を入れます */
-    color: #555; /* 少し薄い文字色にします */
+#videoTitle {
+    font-size: 1.8em;
+    color: #222;
+    margin-bottom: 5px;
+    line-height: 1.3;
 }
 
-#候補動画を表示する場所 {
-    display: flex; /* 候補動画を横並びに配置します */
-    flex-wrap: wrap; /* 画面の幅を超えたら次の行に折り返します */
-    justify-content: center; /* 中央に寄せます */
-    gap: 15px; /* 動画候補の間に隙間を作ります */
-    margin-top: 20px; /* 上に余白を入れます */
+#channelTitle {
+    font-size: 1.1em;
+    color: #666;
 }
 
-/* 以下は動画候補（サムネイルなど）のスタイルです。
-   JavaScriptで動画候補が追加されたときに適用されます。*/
+.controls {
+    margin-bottom: 35px;
+    display: flex;
+    justify-content: center;
+    gap: 15px; /* ボタン間のスペース */
+    flex-wrap: wrap; /* 小さな画面でもボタンが折り返す */
+}
+
+button {
+    background-color: #e03a2e;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.1em;
+    font-weight: bold;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    flex-grow: 1; /* ボタンが伸びる */
+    max-width: 220px; /* ボタンの最大幅 */
+}
+
+button:hover {
+    background-color: #c73328;
+    transform: translateY(-2px); /* 少し浮き上がる */
+}
+
+button:active {
+    transform: translateY(0); /* 押し込んだ感じ */
+}
+
+#skipButton {
+    background-color: #3498db; /* 青系の色 */
+}
+
+#skipButton:hover {
+    background-color: #2980b9;
+}
+
+#neverShowButton {
+    background-color: #f39c12; /* オレンジ系の色 */
+}
+
+#neverShowButton:hover {
+    background-color: #e67e22;
+}
+
+
+.candidate-videos-section {
+    margin-top: 40px;
+    text-align: left;
+}
+
+.candidate-videos-section h2 {
+    font-size: 1.6em;
+    color: #333;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+.candidate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* 適度な幅で自動配置 */
+    gap: 20px; /* グリッド間のスペース */
+    justify-content: center;
+}
+
 .video-candidate {
-    width: 220px; /* 候補動画の幅を設定します */
-    background-color: #f9f9f9; /* 候補動画の背景色を少し白っぽくします */
-    border-radius: 8px; /* 角を丸くします */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); /* 影をつけます */
-    overflow: hidden; /* はみ出した部分を隠します */
-    cursor: pointer; /* マウスを乗せたときに指の形にします */
-    transition: transform 0.2s ease; /* マウスを乗せた時に少しアニメーションします */
-    text-align: left; /* 文字を左揃えにします */
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
 }
 
 .video-candidate:hover {
-    transform: translateY(-5px); /* マウスを乗せた時に少し上に移動させます */
+    transform: translateY(-5px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
 }
 
 .video-candidate img {
-    width: 100%; /* 画像の幅をいっぱいに広げます */
-    height: auto; /* 高さは自動調整します */
-    display: block; /* 余計な隙間をなくします */
+    width: 100%;
+    height: 120px; /* サムネイルの高さ固定 */
+    object-fit: cover; /* 画像がはみ出さないように */
+    display: block;
 }
 
 .video-candidate-title {
-    padding: 10px; /* タイトル内側に余白を入れます */
-    font-size: 14px; /* タイトルの文字サイズを設定します */
-    color: #333; /* タイトルの文字色を設定します */
-    line-height: 1.4; /* 行の高さを設定します */
-    max-height: 4em; /* 4行までに制限します */
-    overflow: hidden; /* はみ出した文字を隠します */
-    text-overflow: ellipsis; /* はみ出した文字を「...」で表示します */
+    padding: 10px;
+    font-size: 0.95em;
+    font-weight: bold;
+    color: #444;
+    text-align: left;
+    height: 3em; /* 2行分くらい確保 */
+    overflow: hidden;
+    text-overflow: ellipsis; /* はみ出たら... */
+    display: -webkit-box;
+    -webkit-line-clamp: 2; /* 2行まで */
+    -webkit-box-orient: vertical;
+}
+
+/* 小さな画面向けの調整 */
+@media (max-width: 600px) {
+    .container {
+        padding: 20px;
+    }
+    h1 {
+        font-size: 2em;
+    }
+    #videoTitle {
+        font-size: 1.5em;
+    }
+    button {
+        font-size: 1em;
+        padding: 10px 20px;
+        max-width: none; /* 小さい画面では全幅に伸びる */
+    }
+    .candidate-grid {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .video-candidate img {
+        height: 90px;
+    }
 }
