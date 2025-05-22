@@ -3,28 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>垂れ流しYouTube</title>
+    <title>僕だけのYouTube垂れ流しアプリ</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <h1>垂れ流しYouTube</h1>
+        <h1>僕だけのYouTube垂れ流しアプリ</h1>
+
         <div id="player"></div>
-        <div class="video-info">
-            <h2 id="videoTitle">動画タイトル</h2>
-            <p id="channelTitle">チャンネル名</p>
-        </div>
+
         <div class="controls">
-            <button id="likeButton">👍 いいね</button>
-            <button id="skipButton">⏩ 次の動画へスキップ</button>
-            <button id="neverShowButton">🗑️ この動画を二度と表示しない</button>
+            <button id="skipButton">次の動画へスキップ</button>
+            <button id="likeButton">お気に入り（いいね！）</button>
         </div>
-        <div class="candidate-videos-section">
-            <h2>次の候補動画</h2>
-            <div id="候補動画を表示する場所" class="candidate-grid">
-                </div>
-        </div>
+
+        <h2>次の候補動画</h2>
+        <div id="候補動画を表示する場所">
+            </div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
